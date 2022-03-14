@@ -14,9 +14,12 @@ class HomeViewController: UIViewController, UITableViewDataSource, UITableViewDe
     
     // 投稿データを格納する配列
     var postArray: [PostData] = []
+    // コメントデータを格納する辞書
+    var commentArray: [String: [CommentData]] = [:]
     
     // Firestoreのリスナー
     var listener: ListenerRegistration?
+    var listeners: [String: ListenerRegistration] = [:]
     
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -47,9 +50,11 @@ class HomeViewController: UIViewController, UITableViewDataSource, UITableViewDe
                     let postData = PostData(document: document)
                     return postData
                 }
+                self.createCommentListener()
                 // TableViewの表示を更新する
                 self.tableView.reloadData()
             }
+            self.createCommentListener()
         }
     }
     
@@ -58,6 +63,7 @@ class HomeViewController: UIViewController, UITableViewDataSource, UITableViewDe
         print("DEBUG_PRINT: viewWillDisappear")
         // listenerを削除して監視を停止する
         listener?.remove()
+        listeners.removeAll()
     }
     
     func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
@@ -67,13 +73,37 @@ class HomeViewController: UIViewController, UITableViewDataSource, UITableViewDe
     func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
         // セルを取得してデータを設定する
         let cell = tableView.dequeueReusableCell(withIdentifier: "Cell", for: indexPath) as! PostTableViewCell
-        cell.setPostData(postArray[indexPath.row])
+        cell.setPostData(post: postArray[indexPath.row], comment: commentArray[postArray[indexPath.row].id])
         
         // セル内のボタンのアクションをソースコードで設定する
         cell.likeButton.addTarget(self, action:#selector(handleButton(_:forEvent:)), for: .touchUpInside)
         cell.commentButton.addTarget(self, action:#selector(handleCommentButton(_:forEvent:)), for: .touchUpInside)
 
         return cell
+    }
+    
+    func createCommentListener(){
+        for postData in self.postArray{
+            if self.listeners[postData.id] == nil{
+                let commentsRef = Firestore.firestore().collection(Const.PostPath).document(postData.id).collection(Const.CommentPath).order(by: "date", descending: true)
+                var commentListener: ListenerRegistration?
+                commentListener = commentsRef.addSnapshotListener() { (querySnapshot, error) in
+                    if let error = error {
+                        print("DEBUG_PRINT: snapshotの取得が失敗しました。 \(error)")
+                        return
+                    }
+                    // 取得したdocumentをもとにCommentDataを作成し、commentArrayの配列にする。
+                    self.commentArray[postData.id] = querySnapshot!.documents.map { document in
+                        print("DEBUG_PRINT: document取得 \(document.documentID)")
+                        let commentData = CommentData(document: document)
+                        return commentData
+                    }
+                    // TableViewの表示を更新する
+                    self.tableView.reloadData()
+                }
+                self.listeners[postData.id] = commentListener
+            }
+        }
     }
     
     // セル内のボタンがタップされた時に呼ばれるメソッド

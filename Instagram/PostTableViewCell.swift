@@ -17,13 +17,7 @@ class PostTableViewCell: UITableViewCell {
     @IBOutlet weak var dateLabel: UILabel!
     @IBOutlet weak var captionLabel: UILabel!
     @IBOutlet weak var commentButton: UIButton!
-    @IBOutlet weak var commentLabel: UILabel!
-    
-    // コメントデータを格納する配列
-    var commentArray: [CommentData] = []
-    
-    // コメント用のリスナー
-    var listener: ListenerRegistration?
+    @IBOutlet weak var stackView: UIStackView!
     
     override func awakeFromNib() {
         super.awakeFromNib()
@@ -32,12 +26,11 @@ class PostTableViewCell: UITableViewCell {
 
     override func setSelected(_ selected: Bool, animated: Bool) {
         super.setSelected(selected, animated: animated)
-
         // Configure the view for the selected state
     }
     
     // PostDataの内容をセルに表示
-    func setPostData(_ postData: PostData) {
+    func setPostData(post postData: PostData, comment commentArray: [CommentData]?) {
         // 画像の表示
         postImageView.sd_imageIndicator = SDWebImageActivityIndicator.gray
         let imageRef = Storage.storage().reference().child(Const.ImagePath).child(postData.id + ".jpg")
@@ -46,25 +39,18 @@ class PostTableViewCell: UITableViewCell {
         // キャプションの表示
         self.captionLabel.text = "\(postData.name!) : \(postData.caption!)"
         
-        // コメントの表示
-        let commentsRef = Firestore.firestore().collection(Const.PostPath).document(postData.id).collection(Const.CommentPath).order(by: "date", descending: true)
-        listener = commentsRef.addSnapshotListener() { (querySnapshot, error) in
-            if let error = error {
-                print("DEBUG_PRINT: snapshotの取得が失敗しました。 \(error)")
-                return
+        //stackViewの内容を全消去
+        self.stackView.arrangedSubviews.forEach { arrangedSubview in arrangedSubview.removeFromSuperview()}
+        //stackViewにコメント内容を追加
+        self.stackView.translatesAutoresizingMaskIntoConstraints = false
+        if commentArray != nil {
+            for commentData in commentArray! {
+                let commentLabel = UILabel()
+                commentLabel.text = "\(commentData.name!) : \(commentData.content!)"
+                commentLabel.numberOfLines = 0
+                commentLabel.sizeToFit()
+                self.stackView.addArrangedSubview(commentLabel)
             }
-            // 取得したdocumentをもとにCommentDataを作成し、commentArrayの配列にする。
-            self.commentArray = querySnapshot!.documents.map { document in
-                print("DEBUG_PRINT: document取得 \(document.documentID)")
-                let commentData = CommentData(document: document)
-                return commentData
-            }
-            
-            self.commentLabel.text = ""
-            for commentData in self.commentArray {
-                self.commentLabel.text? += "\(commentData.name!) : \(commentData.content!)\r"
-            }
-            self.commentLabel.sizeToFit()
         }
         
         // 日時の表示
